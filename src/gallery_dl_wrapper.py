@@ -28,11 +28,14 @@ def build_command(
     url: str
         Target URL to download from.
     cookies: Optional[str]
-        Path to cookies file for authentication. ``None`` disables cookie usage.
+        Path to cookies file for authentication. ``None`` disables cookie
+        usage.
     download_archive: Optional[str]
         File path for gallery-dl's ``--download-archive``. ``None`` to skip.
     rate_limit: Optional[str]
-        Value for ``--rate-limit`` (e.g. ``"1M"``) or ``--sleep`` (e.g. ``"2"`` seconds).
+        Value for ``--limit-rate`` (e.g. ``"1M"``) or ``--sleep``
+        (e.g. ``"2"`` seconds). Non-numeric values use ``--limit-rate``;
+        numeric values are treated as seconds for ``--sleep``.
         ``None`` to omit.
     extra_args: Optional[Iterable[str]]
         Additional arguments for gallery-dl.
@@ -65,7 +68,7 @@ def build_command(
         if rate_limit.replace(".", "", 1).isdigit():
             command.extend(["--sleep", rate_limit])
         else:
-            command.extend(["--rate-limit", rate_limit])
+            command.extend(["--limit-rate", rate_limit])
     if extra_args:
         command.extend(list(extra_args))
     logger.debug("Built command: %s", command)
@@ -90,7 +93,7 @@ def execute(
     download_archive: Optional[str]
         File path for gallery-dl's ``--download-archive``.
     rate_limit: Optional[str]
-        Value for ``--rate-limit`` or ``--sleep`` depending on format.
+        Value for ``--limit-rate`` or ``--sleep`` depending on format.
     extra_args: Optional[Iterable[str]]
         Additional arguments for gallery-dl.
 
