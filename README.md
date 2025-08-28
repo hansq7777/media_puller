@@ -19,8 +19,8 @@ pip install -r requirements.txt
 ## Configuration
 
 * Export your browser cookies (Chrome compatible) and have the file ready.
-* Decide whether to keep a download archive (`downloaded.txt`) to skip already downloaded files.
-* Optional: choose a rate limit and enable deduplication after downloads.
+* Choose a download directory if you enable the download archive; the file `downloaded.txt` will be saved alongside the media.
+* Optional: specify a rate limit like `1M` or a sleep delay like `2` (seconds), and enable deduplication after downloads.
 
 ## Running
 
@@ -48,7 +48,7 @@ pytest
 
 ## Performance tuning
 
-* Adjust the rate limit parameter to balance speed and server load.
+* Adjust the rate limit or sleep parameter to balance speed and server load.
 * Disable the download archive if re-downloading content is acceptable.
 
 ## Updating
