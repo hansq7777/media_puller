@@ -6,6 +6,8 @@ import logging
 import os
 from typing import Dict, List
 
+from .exceptions import SystemOperationError, UserInputError
+
 logger = logging.getLogger(__name__)
 
 _HASH_CHUNK_SIZE = 1024 * 1024  # 1MB
@@ -53,18 +55,20 @@ def remove_duplicates(directory: str) -> List[str]:
 
     Raises
     ------
-    ValueError
+    UserInputError
         If ``directory`` is not a valid directory.
-    OSError
-        Propagated if deletion of a duplicate file fails.
+    SystemOperationError
+        If deletion of a duplicate file fails.
 
     Side Effects
     ------------
     Files may be deleted from the filesystem. Log entries are emitted for
     duplicate detections and removals.
     """
+    logger.info("Scanning %s for duplicates", directory)
     if not os.path.isdir(directory):
-        raise ValueError(f"{directory!r} is not a valid directory")
+        logger.error("Invalid directory: %s", directory)
+        raise UserInputError(f"{directory!r} is not a valid directory")
 
     seen_hashes: Dict[str, str] = {}
     removed: List[str] = []
@@ -88,9 +92,10 @@ def remove_duplicates(directory: str) -> List[str]:
                         seen_hashes[file_hash],
                     )
                 except OSError as exc:
-                    logger.error("Failed to remove duplicate %s: %s", path, exc)
-                    raise
+                    logger.exception("Failed to remove duplicate %s: %s", path, exc)
+                    raise SystemOperationError(f"Failed to remove {path}") from exc
             else:
                 seen_hashes[file_hash] = path
 
+    logger.info("Duplicate scan complete; removed %d files", len(removed))
     return removed

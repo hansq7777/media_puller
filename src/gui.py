@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 from . import duplicates, gallery_dl_wrapper
+from .exceptions import SystemOperationError, UserInputError
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,17 @@ class DownloaderGUI:
     """
 
     def __init__(self) -> None:
+        """Initialize the main window and default state.
+
+        Returns
+        -------
+        None
+
+        Side Effects
+        ------------
+        Creates the Tk root window and widget layout.
+        """
+        logger.info("Initializing GUI window")
         self.root = tk.Tk()
         self.root.title("Media Puller")
         self._build_widgets()
@@ -63,11 +75,32 @@ class DownloaderGUI:
         tk.Button(self.root, text="开始下载", command=self.start_download).grid(row=6, column=0, columnspan=2, pady=10)
 
     def run(self) -> None:
-        """Start the Tkinter main loop."""
+        """Start the Tkinter main loop.
+
+        Returns
+        -------
+        None
+
+        Side Effects
+        ------------
+        Blocks the current thread until the GUI window is closed.
+        """
+        logger.info("Entering GUI main loop")
         self.root.mainloop()
 
     def select_cookies(self) -> None:
-        """Prompt user to select a cookies file."""
+        """Prompt user to select a cookies file.
+
+        Returns
+        -------
+        None
+
+        Side Effects
+        ------------
+        Opens a file dialog and updates the internal cookies path and label.
+        Emits a log entry with the chosen file.
+        """
+        logger.info("Selecting cookies file")
         path = filedialog.askopenfilename(title="选择Chrome导出的Cookies")
         if path:
             self.cookies_path = path
@@ -75,7 +108,18 @@ class DownloaderGUI:
             logger.info("Selected cookies file: %s", path)
 
     def select_directory(self) -> None:
-        """Prompt user to select a download directory."""
+        """Prompt user to select a download directory.
+
+        Returns
+        -------
+        None
+
+        Side Effects
+        ------------
+        Opens a directory selection dialog and updates the download path
+        label. Emits a log entry with the chosen directory.
+        """
+        logger.info("Selecting download directory")
         path = filedialog.askdirectory(title="选择下载目录")
         if path:
             self.directory_path = path
@@ -83,9 +127,21 @@ class DownloaderGUI:
             logger.info("Selected download directory: %s", path)
 
     def start_download(self) -> None:
-        """Collect parameters and start the download in a separate thread."""
+        """Collect parameters and start the download in a separate thread.
+
+        Returns
+        -------
+        None
+
+        Side Effects
+        ------------
+        Validates user input, spawns a download thread and shows message
+        boxes on validation errors.
+        """
+        logger.info("Initiating download")
         url = self.url_var.get().strip()
         if not url:
+            logger.warning("URL input missing")
             messagebox.showerror("错误", "请填写用户地址")
             return
         if not url.endswith("/media"):
@@ -93,15 +149,17 @@ class DownloaderGUI:
 
         rate_limit = self.rate_var.get().strip() or None
         if rate_limit and not re.match(r"^\d+(\.\d+)?([KMGkmg])?$", rate_limit):
+            logger.warning("Invalid rate limit: %s", rate_limit)
             messagebox.showerror("错误", "速率限制格式错误")
             return
 
-        extra_args = []
+        extra_args: list[str] = []
         download_archive = None
         if self.directory_path:
             extra_args.extend(["--directory", self.directory_path])
         if self.archive_var.get():
             if not self.directory_path:
+                logger.warning("Archive enabled without directory")
                 messagebox.showerror("错误", "启用记录需选择下载目录")
                 return
             download_archive = os.path.join(self.directory_path, "downloaded.txt")
@@ -111,6 +169,7 @@ class DownloaderGUI:
             args=(url, self.cookies_path, download_archive, rate_limit, extra_args or None),
         )
         thread.start()
+        logger.info("Download thread started")
 
     def _run_download(
         self,
@@ -121,6 +180,7 @@ class DownloaderGUI:
         extra_args: Optional[list[str]],
     ) -> None:
         """Execute gallery-dl and handle completion or failure."""
+        logger.info("Running gallery-dl for %s", url)
         try:
             gallery_dl_wrapper.execute(
                 url,
@@ -132,7 +192,9 @@ class DownloaderGUI:
             if self.dedupe_var.get():
                 self._dedupe()
             messagebox.showinfo("完成", "下载结束")
+            logger.info("Download completed")
         except gallery_dl_wrapper.GalleryDLError as exc:
+            logger.error("Download failed: %s", exc)
             messagebox.showerror("下载失败", str(exc))
 
     def _dedupe(self) -> None:
@@ -147,6 +209,6 @@ class DownloaderGUI:
         try:
             removed = duplicates.remove_duplicates(self.directory_path)
             logger.info("Deduplication removed %d files", len(removed))
-        except (ValueError, OSError) as exc:
+        except (UserInputError, SystemOperationError) as exc:
             logger.error("Deduplication failed: %s", exc)
             messagebox.showerror("查重失败", str(exc))
