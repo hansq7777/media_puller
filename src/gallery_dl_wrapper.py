@@ -141,6 +141,9 @@ def run(command: Iterable[str]) -> subprocess.CompletedProcess:
     ------
     GalleryDLError
         If the command execution fails or ``gallery-dl`` is missing.
+        The stderr output from ``gallery-dl`` is included in the
+        exception message and known errors (e.g. ``WinError 32``) are
+        translated into friendlier descriptions.
 
     Side Effects
     ------------
@@ -160,5 +163,12 @@ def run(command: Iterable[str]) -> subprocess.CompletedProcess:
         logger.exception("gallery-dl not found")
         raise GalleryDLError("gallery-dl command not found") from exc
     except subprocess.CalledProcessError as exc:
-        logger.exception("gallery-dl execution failed: %s", exc.stderr)
-        raise GalleryDLError("gallery-dl execution failed") from exc
+        stderr = exc.stderr or ""
+        message = stderr.strip() or "gallery-dl execution failed"
+        if "WinError 32" in stderr:
+            message = (
+                "The process cannot access the file because it is being used "
+                "by another process"
+            )
+        logger.exception("gallery-dl execution failed: %s", stderr)
+        raise GalleryDLError(message) from exc
