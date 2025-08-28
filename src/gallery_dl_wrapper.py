@@ -5,10 +5,12 @@ import logging
 import subprocess
 from typing import Iterable, List, Optional
 
+from .exceptions import ThirdPartyError, UserInputError
+
 logger = logging.getLogger(__name__)
 
 
-class GalleryDLError(RuntimeError):
+class GalleryDLError(ThirdPartyError):
     """Exception raised when gallery-dl fails to execute."""
 
 
@@ -42,11 +44,17 @@ def build_command(
 
     Raises
     ------
-    ValueError
+    UserInputError
         If ``url`` is missing.
+
+    Side Effects
+    ------------
+    Logs the assembled command.
     """
+    logger.info("Building gallery-dl command for %s", url)
     if not url:
-        raise ValueError("url is required")
+        logger.error("Missing URL for gallery-dl command")
+        raise UserInputError("url is required")
 
     command = ["gallery-dl", url]
     if cookies:
@@ -95,7 +103,12 @@ def execute(
     ------
     GalleryDLError
         If execution fails or ``gallery-dl`` is missing.
+
+    Side Effects
+    ------------
+    Invokes a subprocess to run ``gallery-dl``.
     """
+    logger.info("Executing gallery-dl for %s", url)
     command = build_command(
         url=url,
         cookies=cookies,
@@ -103,7 +116,9 @@ def execute(
         rate_limit=rate_limit,
         extra_args=extra_args,
     )
-    return run(command)
+    result = run(command)
+    logger.info("gallery-dl execution finished")
+    return result
 
 
 def run(command: Iterable[str]) -> subprocess.CompletedProcess:
@@ -123,7 +138,12 @@ def run(command: Iterable[str]) -> subprocess.CompletedProcess:
     ------
     GalleryDLError
         If the command execution fails or ``gallery-dl`` is missing.
+
+    Side Effects
+    ------------
+    Spawns a subprocess running ``gallery-dl``.
     """
+    logger.debug("Running command: %s", list(command))
     try:
         result = subprocess.run(
             list(command),
