@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
+from pathlib import Path
 from typing import Iterable, List, Optional
 
 from .exceptions import ThirdPartyError, UserInputError
 
 logger = logging.getLogger(__name__)
+
+WINERROR_32 = "WinError 32"
 
 
 class GalleryDLError(ThirdPartyError):
@@ -147,28 +151,119 @@ def run(command: Iterable[str]) -> subprocess.CompletedProcess:
 
     Side Effects
     ------------
-    Spawns a subprocess running ``gallery-dl``.
+    Removes ``*.part`` files in the target directory, spawns a
+    subprocess running ``gallery-dl`` and may retry once if a
+    ``WinError 32`` occurs.
     """
-    logger.debug("Running command: %s", list(command))
-    try:
-        result = subprocess.run(
-            list(command),
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        logger.info("gallery-dl completed successfully")
-        return result
-    except FileNotFoundError as exc:
-        logger.exception("gallery-dl not found")
-        raise GalleryDLError("gallery-dl command not found") from exc
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr or ""
-        message = stderr.strip() or "gallery-dl execution failed"
-        if "WinError 32" in stderr:
-            message = (
-                "The process cannot access the file because it is being used "
-                "by another process"
+    cmd_list = list(command)
+    logger.debug("Running command: %s", cmd_list)
+    directory = _extract_directory(cmd_list)
+    if directory:
+        _cleanup_part_files(directory)
+    for attempt in range(2):
+        try:
+            result = subprocess.run(
+                cmd_list,
+                check=True,
+                capture_output=True,
+                text=True,
             )
-        logger.exception("gallery-dl execution failed: %s", stderr)
-        raise GalleryDLError(message) from exc
+            logger.info("gallery-dl completed successfully")
+            return result
+        except FileNotFoundError as exc:
+            logger.exception("gallery-dl not found")
+            raise GalleryDLError("gallery-dl command not found") from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr or ""
+            message = stderr.strip() or "gallery-dl execution failed"
+            if WINERROR_32 in stderr:
+                message = (
+                    "The process cannot access the file because it is being "
+                    "used by another process"
+                )
+                part_file = _extract_part_file(stderr)
+                if part_file:
+                    try:
+                        part_file.unlink()
+                        logger.warning("Removed locked partial file: %s", part_file)
+                    except OSError as cleanup_exc:
+                        logger.warning(
+                            "Could not remove partial file %s: %s",
+                            part_file,
+                            cleanup_exc,
+                        )
+                if attempt == 0:
+                    logger.info("Retrying gallery-dl after WinError 32")
+                    continue
+            logger.exception("gallery-dl execution failed: %s", stderr)
+            raise GalleryDLError(message) from exc
+    raise GalleryDLError("gallery-dl execution failed")
+
+
+def _extract_directory(command: List[str]) -> Optional[Path]:
+    """Return the download directory from the command if provided.
+
+    Parameters
+    ----------
+    command: List[str]
+        Command list passed to :func:`run`.
+
+    Returns
+    -------
+    Optional[Path]
+        Path to the download directory or ``None`` if not specified.
+
+    Side Effects
+    ------------
+    Logs a warning if ``--directory`` is provided without a value.
+    """
+    if "--directory" in command:
+        index = command.index("--directory")
+        try:
+            return Path(command[index + 1])
+        except IndexError:
+            logger.warning("--directory provided without a value")
+    return None
+
+
+def _cleanup_part_files(directory: Path) -> None:
+    """Remove ``*.part`` files from a directory.
+
+    Parameters
+    ----------
+    directory: Path
+        Directory to scan for partial download files.
+
+    Returns
+    -------
+    None
+
+    Side Effects
+    ------------
+    Deletes files from the filesystem and logs the outcome.
+    """
+    for part in directory.glob("*.part"):
+        try:
+            part.unlink()
+            logger.info("Removed leftover partial file: %s", part)
+        except OSError as exc:
+            logger.warning("Could not remove partial file %s: %s", part, exc)
+
+
+def _extract_part_file(stderr: str) -> Optional[Path]:
+    """Extract the path of a ``.part`` file from stderr output.
+
+    Parameters
+    ----------
+    stderr: str
+        stderr output from ``gallery-dl``.
+
+    Returns
+    -------
+    Optional[Path]
+        Path to the partial file if found, otherwise ``None``.
+    """
+    match = re.search(r'["\']([^"\']+\.part)["\']', stderr)
+    if match:
+        return Path(match.group(1))
+    return None
