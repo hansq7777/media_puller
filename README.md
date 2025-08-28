@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 * Export your browser cookies (Chrome compatible) and have the file ready.
 * Choose a download directory if you enable the download archive; the file `downloaded.txt` will be saved alongside the media.
-* Optional: specify a rate limit like `1M` or a sleep delay like `2` (seconds), and enable deduplication after downloads.
+* Optional: specify a rate limit like `1M` or a sleep delay like `2` (seconds), and enable deduplication after downloads. When deduplication is on, duplicate files (determined by SHA256 hash) are removed automatically.
 
 ## Running
 
