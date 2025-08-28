@@ -15,8 +15,8 @@ class GalleryDLError(RuntimeError):
 def build_command(
     url: str,
     cookies: Optional[str] = None,
-    archive_path: Optional[str] = None,
-    rate: Optional[str] = None,
+    download_archive: Optional[str] = None,
+    rate_limit: Optional[str] = None,
     extra_args: Optional[Iterable[str]] = None,
 ) -> List[str]:
     """Build a gallery-dl command.
@@ -26,11 +26,12 @@ def build_command(
     url: str
         Target URL to download from.
     cookies: Optional[str]
-        Path to cookies file for authentication. If ``None`` no cookies are used.
-    archive_path: Optional[str]
-        Path to the download archive file. If ``None`` the archive option is omitted.
-    rate: Optional[str]
-        Rate limit value passed to ``--rate``. ``None`` to skip.
+        Path to cookies file for authentication. ``None`` disables cookie usage.
+    download_archive: Optional[str]
+        File path for gallery-dl's ``--download-archive``. ``None`` to skip.
+    rate_limit: Optional[str]
+        Value for ``--rate-limit`` (e.g. ``"1M"``) or ``--sleep`` (e.g. ``"2"`` seconds).
+        ``None`` to omit.
     extra_args: Optional[Iterable[str]]
         Additional arguments for gallery-dl.
 
@@ -50,14 +51,59 @@ def build_command(
     command = ["gallery-dl", url]
     if cookies:
         command.extend(["--cookies", cookies])
-    if archive_path:
-        command.extend(["--download-archive", archive_path])
-    if rate:
-        command.extend(["--rate", rate])
+    if download_archive:
+        command.extend(["--download-archive", download_archive])
+    if rate_limit:
+        if rate_limit.replace(".", "", 1).isdigit():
+            command.extend(["--sleep", rate_limit])
+        else:
+            command.extend(["--rate-limit", rate_limit])
     if extra_args:
         command.extend(list(extra_args))
     logger.debug("Built command: %s", command)
     return command
+
+
+def execute(
+    url: str,
+    cookies: Optional[str] = None,
+    download_archive: Optional[str] = None,
+    rate_limit: Optional[str] = None,
+    extra_args: Optional[Iterable[str]] = None,
+) -> subprocess.CompletedProcess:
+    """Build and execute a gallery-dl command.
+
+    Parameters
+    ----------
+    url: str
+        Target URL to download from.
+    cookies: Optional[str]
+        Path to cookies file for authentication.
+    download_archive: Optional[str]
+        File path for gallery-dl's ``--download-archive``.
+    rate_limit: Optional[str]
+        Value for ``--rate-limit`` or ``--sleep`` depending on format.
+    extra_args: Optional[Iterable[str]]
+        Additional arguments for gallery-dl.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        Result from ``subprocess.run``.
+
+    Raises
+    ------
+    GalleryDLError
+        If execution fails or ``gallery-dl`` is missing.
+    """
+    command = build_command(
+        url=url,
+        cookies=cookies,
+        download_archive=download_archive,
+        rate_limit=rate_limit,
+        extra_args=extra_args,
+    )
+    return run(command)
 
 
 def run(command: Iterable[str]) -> subprocess.CompletedProcess:
