@@ -49,6 +49,9 @@ pytest
   connectivity.
 * **Authentication issues** – confirm the cookies file path is correct and the
   cookies have not expired.
+* **WinError 32** – indicates a file is locked by another process. Close file
+  viewers, disable antivirus scans, and remove stale `.part` files before
+  retrying.
 
 ## Performance tuning
 
