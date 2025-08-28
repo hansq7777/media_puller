@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
-from . import gallery_dl_wrapper
+from . import duplicates, gallery_dl_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -136,5 +136,17 @@ class DownloaderGUI:
             messagebox.showerror("下载失败", str(exc))
 
     def _dedupe(self) -> None:
-        """Placeholder for deduplication step after download."""
-        logger.info("Deduplication step enabled but not implemented.")
+        """Remove duplicate files in the selected directory.
+
+        This function is invoked after a successful download when the user
+        enables the "下载后查重" option. Errors are shown to the user and logged.
+        """
+        if not self.directory_path:
+            logger.warning("Deduplication requested but no directory selected")
+            return
+        try:
+            removed = duplicates.remove_duplicates(self.directory_path)
+            logger.info("Deduplication removed %d files", len(removed))
+        except (ValueError, OSError) as exc:
+            logger.error("Deduplication failed: %s", exc)
+            messagebox.showerror("查重失败", str(exc))
